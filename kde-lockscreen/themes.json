@@ -3,8 +3,13 @@
     "name": "NieR: Automata",
     "passwordId": "pwInput",
     "messageTarget": "errText.text",
-    "nativeHooks": true,
-    "userSwitchAction": "userList.currentIndex = index"
+    "userSwitchAction": "userList.currentIndex = index",
+    "replacements": [
+      [
+        " else if (event.key === Qt.Key_Tab) { event.accepted = true; if (typeof sessionModel !== \"undefined\" && sessionModel.rowCount() > 0) root.sessionIndex = (root.sessionIndex + 1) % sessionModel.rowCount(); } else if (event.key === Qt.Key_Up) { event.accepted = true; userList.currentIndex = Math.max(0, userList.currentIndex - 1); } else if (event.key === Qt.Key_Down) { event.accepted = true; userList.currentIndex = Math.min(userList.model.count - 1, userList.currentIndex + 1); }",
+        ""
+      ]
+    ]
   },
   "material-you": {
     "name": "Material You",

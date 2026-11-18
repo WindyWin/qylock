@@ -257,7 +257,8 @@ Review the theme's session actions, scale calculations, additional QML imports,
 and any custom password or login logic before registering it. Themes with their
 own `clearPassword()` or `focusPassword()` functions need their hooks reviewed
 instead of injecting duplicate functions. `nativeHooks: true` is reserved for
-themes that already implement the full KDE adapter contract, such as NieR.
+themes that already implement the full KDE adapter contract themselves; no
+bundled theme does, so every port is adapted in the build copy.
 
 Validate the new port before keeping its registry entry:
 

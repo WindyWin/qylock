@@ -43,17 +43,13 @@ TestCase {
         keyboardMock.numLock = false;
         theme.active = true;
         compare(theme.status, Loader.Ready);
-        verify(!theme.item.isKdeLock);
         verify(!theme.item.isQuickshell);
         verify(keyboardMock.numLock);
-        verify(findChild(theme.item, "qylockPassword").enabled);
     }
     function test_quickshell() {
         sddm = quickshellMock;
         theme.active = true;
         compare(theme.status, Loader.Ready);
-        verify(!theme.item.isKdeLock);
         verify(theme.item.isQuickshell);
-        verify(findChild(theme.item, "qylockPassword").enabled);
     }
 }

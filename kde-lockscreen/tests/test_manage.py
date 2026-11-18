@@ -54,6 +54,21 @@ class PackageTests(unittest.TestCase):
         marker = json.loads((destination / manage.MARKER).read_text())
         self.assertEqual(marker["system_fingerprint"], manage.shell_fingerprint(self.shell))
 
+    def test_build_adapts_nier_automata_without_editing_the_theme(self):
+        destination = self.root / "package"
+        manage.build(destination, self.shell, "nier-automata")
+        built = (destination / "contents/lockscreen/theme/Main.qml").read_text()
+        original = (manage.REPO / "themes/nier-automata/Main.qml").read_text()
+        self.assertNotIn("qylockBackend", original)
+        self.assertIn('objectName: "qylockPassword"', built)
+        self.assertIn("enabled: qylockBackend.canSubmit", built)
+        self.assertIn("function clearPassword()", built)
+        self.assertIn("function focusPassword()", built)
+        self.assertIn("Math.min(width / 1366, height / 768)", built)
+        # The password field must not swallow Tab, or keyboard users cannot reach Switch User.
+        self.assertIn("Qt.Key_Tab", original)
+        self.assertNotIn("Qt.Key_Tab", built)
+
     def test_build_dereferences_linked_shell_components(self):
         outside = self.root / "elsewhere"
         (outside / "views").mkdir(parents=True)
