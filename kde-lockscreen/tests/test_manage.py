@@ -3,6 +3,7 @@ import contextlib
 import io
 import json
 import os
+import re
 from pathlib import Path
 import shutil
 import tempfile
@@ -126,6 +127,34 @@ class PackageTests(unittest.TestCase):
         self.assertIn("root.errorMessage = message", generated)
         self.assertIn("property bool isQuickshell: true", generated)
         self.assertEqual((manage.REPO / "themes/material-you/Main.qml").read_text(), original)
+
+    def test_media_waits_for_lock_screen_permission(self):
+        multi_line = 'MediaPlayer {\n    id: mediaplayer\n    source: "bg.mp4"\n    autoPlay: true\n}'
+        single_line = 'MediaPlayer { id: player; source: "bg.mp4"; loops: MediaPlayer.Infinite; Component.onCompleted: player.play() }'
+        expression = 'Item { MediaPlayer {\n    source: root.bgVideo\n    audioOutput: AudioOutput { source: x }\n} }'
+        for source, value in ((multi_line, '"bg.mp4"'), (single_line, '"bg.mp4"'), (expression, "root.bgVideo")):
+            adapted = manage.adapt_media(source)
+            self.assertIn(f'source: (qylockMediaAllowed ? ({value}) : "")', adapted)
+            self.assertIn("onQylockMediaGateChanged: if (qylockMediaGate) Qt.callLater(() => play());", adapted)
+            self.assertEqual(adapted.count("qylockMediaAllowed ?"), 1)
+        # Nested objects keep their own source untouched.
+        self.assertIn("AudioOutput { source: x }", manage.adapt_media(expression))
+        self.assertEqual(manage.adapt_media("Image { source: \"bg.png\" }"), "Image { source: \"bg.png\" }")
+
+    def test_media_without_reviewed_source_rejected(self):
+        with self.assertRaisesRegex(ValueError, "MediaPlayer source changed"):
+            manage.adapt_media("MediaPlayer { id: player }")
+
+    def test_every_port_builds_with_gated_media(self):
+        for theme in manage.THEMES:
+            with self.subTest(theme=theme):
+                destination = self.root / "all" / theme
+                manage.build(destination, self.shell, theme)
+                for qml in (destination / "contents/lockscreen/theme").rglob("*.qml"):
+                    text = qml.read_text()
+                    players = re.findall(r"\bMediaPlayer\s*\{", text)
+                    self.assertEqual(text.count("qylockMediaAllowed ?"), len(players), qml)
+                    self.assertNotIn('source: "bg.mp4"', text)
 
     def test_discovery_includes_nested_variants(self):
         self.assertIn("clockwork/tape", manage.available_themes())

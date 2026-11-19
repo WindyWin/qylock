@@ -216,6 +216,28 @@ Additional PAM prompts use the same password response field and the theme's
 existing masking. Authentication methods still depend on your system's KDE/PAM
 configuration.
 
+### Video backgrounds and sleep
+
+Video themes start playback only after the lock is up: on the first pointer
+movement, or after 10 seconds awake. Playback stops on Sleep. When you suspend,
+KWin holds systemd-logind's sleep *delay inhibitor* until the lock screen is
+shown on every monitor. One 4K/60 fps decoder per monitor can outlast logind's
+default 5 s `InhibitDelayMaxSec`. logind then suspends mid-modeset, and on a
+hybrid Intel+NVIDIA laptop KWin can hang after resume. The build applies this
+without editing `themes/`: each theme `MediaPlayer` source is gated on
+`qylockMediaAllowed` from `LockScreen.qml`.
+
+As a safety net for slow GPUs, give the locker more time before a forced suspend:
+
+```sh
+sudo mkdir -p /etc/systemd/logind.conf.d
+printf '[Login]\nInhibitDelayMaxSec=20\n' | sudo tee /etc/systemd/logind.conf.d/qylock-inhibit-delay.conf
+```
+
+Recent NVIDIA drivers that report `UseKernelSuspendNotifiers: 1` in
+`/proc/driver/nvidia/params` already preserve video memory through kernel
+notifiers. Do not also enable `nvidia-suspend/resume/hibernate.service` on them.
+
 ## Add another theme
 
 The picker discovers theme directories recursively and exposes the ports registered

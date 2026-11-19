@@ -93,6 +93,48 @@ def adapt_user_switch(source, port):
     return source
 
 
+def _block_end(source, open_brace):
+    depth = 0
+    for i in range(open_brace, len(source)):
+        if source[i] == "{":
+            depth += 1
+        elif source[i] == "}":
+            depth -= 1
+            if depth == 0:
+                return i
+    raise ValueError("Unbalanced braces in theme QML; review this theme's KDE port.")
+
+
+def adapt_media(source):
+    """Hold theme videos until LockScreen.qml allows them (qylockMediaAllowed).
+
+    A decoder per output started while the greeter maps its windows can outlast
+    logind's sleep delay inhibitor, so the system suspends mid-modeset. An empty
+    source also unloads the decoder before sleep; reopening the gate plays again.
+    """
+    result, position = [], 0
+    for match in re.finditer(r"\bMediaPlayer\s*\{", source):
+        if match.start() < position:
+            continue
+        start = match.end() - 1
+        end = _block_end(source, start)
+        body = source[start + 1:end]
+        top = [m for m in re.finditer(r"(?<![\w.])source\s*:\s*([^;\n}]+?)\s*(?=;|\n|$)", body)
+               if body[:m.start()].count("{") == body[:m.start()].count("}")]
+        if len(top) != 1:
+            raise ValueError("Theme MediaPlayer source changed; review this theme's KDE port.")
+        m = top[0]
+        body = (body[:m.start()] + f'source: (qylockMediaAllowed ? ({m[1]}) : "")' + body[m.end():])
+        # autoPlay fires only on the first load, so restart explicitly whenever the
+        # gate reopens (after resume). callLater lets the source binding update first.
+        body = (" readonly property bool qylockMediaGate: qylockMediaAllowed;"
+                " onQylockMediaGateChanged: if (qylockMediaGate) Qt.callLater(() => play());" + body)
+        result += [source[position:start + 1], body, "}"]
+        position = end + 1
+    result.append(source[position:])
+    return "".join(result)
+
+
 def adapt_theme(source, port):
     """Add the same locker contract to reviewed SDDM themes in the build copy."""
     for old, new in port.get("replacements", []):
@@ -273,6 +315,11 @@ def build(destination, shell, theme):
     if source.count(old_import) != (0 if port.get("sddmImport") is False else 1):
         raise ValueError("Theme's SDDM import changed; review the KDE port before building.")
     main.write_text(adapt_theme(source.replace(old_import, 'import "../compat"'), port))
+    for qml in (locker / "theme").rglob("*.qml"):
+        text = qml.read_text()
+        adapted = adapt_media(text)
+        if adapted != text:
+            qml.write_text(adapted)
     (locker / "compat").mkdir()
     shutil.copy2(REPO / "quickshell-lockscreen/imports/SddmComponents/TextConstants.qml", locker / "compat")
     config = configparser.ConfigParser(interpolation=None)

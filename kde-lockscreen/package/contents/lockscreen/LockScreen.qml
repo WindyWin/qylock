@@ -22,12 +22,18 @@ Item {
     readonly property var sessionModel: sessions
     readonly property var keyboard: keyboardCompat
     property bool useFallback: false
+    // Theme videos start only once the lock is up. Starting a decoder per output while
+    // the greeter maps its windows can outlast logind's sleep delay inhibitor, which
+    // then suspends mid-modeset and can hang the compositor on resume.
+    property bool mediaArmed: false
+    readonly property bool qylockMediaAllowed: viewVisible && mediaArmed && !useFallback
+    function disarmMedia() { mediaArmed = false; }
 
     implicitWidth: 1366
     implicitHeight: 768
     onClearPassword: authBridge.reset()
     onViewVisibleChanged: {
-        if (!viewVisible) { authBridge.reset(); optionsPopup.close(); }
+        if (!viewVisible) { authBridge.reset(); optionsPopup.close(); root.disarmMedia(); }
     }
 
     function toggleOptions() {
@@ -45,6 +51,18 @@ Item {
         acceptedButtons: Qt.RightButton
         enabled: !root.useFallback
         onTapped: root.toggleOptions()
+    }
+
+    // QTimer runs on the monotonic clock, so the delay pauses while the system sleeps.
+    Timer {
+        id: mediaDelay
+        interval: 10000
+        running: root.viewVisible && !root.mediaArmed
+        onTriggered: root.mediaArmed = true
+    }
+    HoverHandler {
+        // Pointer movement means someone is at the screen: start videos now.
+        onPointChanged: if (root.viewVisible) root.mediaArmed = true
     }
 
     ThemeConfig { id: themeConfig }
@@ -72,6 +90,7 @@ Item {
         }
         function suspend() {
             authBridge.reset();
+            root.disarmMedia();
             if (sessionManagement.canSuspend) sessionManagement.suspend();
         }
     }
@@ -119,7 +138,7 @@ Item {
 
     Connections {
         target: sessionManagement
-        function onAboutToSuspend() { authBridge.reset(); }
+        function onAboutToSuspend() { authBridge.reset(); root.disarmMedia(); }
     }
 
     Loader {
@@ -243,7 +262,7 @@ Item {
                     Button {
                         text: qsTr("Sleep")
                         visible: sessionManagement.canSuspend
-                        onClicked: { optionsPopup.close(); authBridge.reset(); sessionManagement.suspend(); }
+                        onClicked: { optionsPopup.close(); authBridge.reset(); root.disarmMedia(); sessionManagement.suspend(); }
                     }
                     Button {
                         text: qsTr("Switch User")
